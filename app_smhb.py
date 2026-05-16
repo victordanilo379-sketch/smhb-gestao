@@ -4,8 +4,7 @@ from datetime import datetime
 import contextlib
 import threading
 
-# 1. ARQUITETURA DE SEGURANÇA MÁXIMA (AUDITORIA NÍVEL 25)
-# Lock global para evitar corrupção de dados em acessos simultâneos no servidor
+# 1. ARQUITETURA DE SEGURANÇA MÁXIMA
 _db_lock = threading.Lock()
 
 st.set_page_config(
@@ -26,7 +25,6 @@ st.markdown("""
             color: #0f172a;
         }
 
-        /* Botões de Navegação Superiores */
         .stButton>button {
             width: 100%;
             border-radius: 14px;
@@ -47,7 +45,6 @@ st.markdown("""
             transform: translateY(-1px);
         }
 
-        /* Cartões de Dashboard */
         [data-testid="stMetric"] {
             background: #ffffff !important;
             border: 1px solid #e2e8f0 !important;
@@ -56,7 +53,6 @@ st.markdown("""
             box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02) !important;
         }
 
-        /* Área do Tutorial Interno */
         .tutorial-box {
             background: linear-gradient(135deg, #eff6ff, #dbeafe);
             border-left: 6px solid #2563eb;
@@ -66,7 +62,6 @@ st.markdown("""
             margin-bottom: 20px;
         }
 
-        /* Emblemas de Identificação Visual */
         .badge {
             display: inline-block;
             padding: 4px 12px;
@@ -78,7 +73,6 @@ st.markdown("""
         .badge-cr { background: #dbeafe; color: #1e40af; border: 1px solid #bfdbfe; }
         .badge-p { background: #ffedd5; color: #9a3412; border: 1px solid #fed7aa; }
 
-        /* Otimizações Específicas para Mobile Touch */
         @media (max-width: 768px) {
             .stButton>button { height: 3.8rem; font-size: 15px; }
             .stRadio>div { gap: 15px !important; }
@@ -134,7 +128,6 @@ for idx, (label, target) in enumerate(menu_options):
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# Listas Estáticas de Validação
 CARGOS = ["Presidente SMHB", "Vice-Presidente SMHB", "1° Secretário SMHB", "2° Secretário SMHB", "1° Tesoureiro SMHB", "2° Tesoureiro SMHB", "Integrante SMHB"]
 IGREJAS = ["Igreja Batista Cristo Rei (CR)", "Igreja Batista Proclamai (P)"]
 TIPOS = ["Culto", "Reunião de Líderes", "Esporte Missionário", "Intercambio", "Outro"]
@@ -154,7 +147,6 @@ if st.session_state.page == 'home':
     
     st.markdown("---")
     
-    # TUTORIAL INTERNO INTEGRADO
     with st.expander("📖 TUTORIAL INTERNO DE USO RÁPIDO (Clique para abrir/fechar)", expanded=False):
         st.markdown("""
         <div class="tutorial-box">
@@ -189,7 +181,6 @@ elif st.session_state.page == 'new':
 
 elif st.session_state.page == 'membros':
     st.subheader("👥 Quadro Geral de Membros")
-    
     col_f1, col_f2 = st.columns([2, 1])
     search = col_f1.text_input("🔍 Filtrar por Nome:").upper()
     f_igreja = col_f2.selectbox("⛪ Filtrar por Igreja:", ["Todas"] + IGREJAS)
