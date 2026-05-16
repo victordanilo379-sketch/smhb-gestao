@@ -3,8 +3,12 @@ import sqlite3
 from datetime import datetime
 import contextlib
 import threading
+from pathlib import Path
 
 _db_lock = threading.Lock()
+
+# FIX 1: caminho absoluto — funciona local E no Streamlit Cloud
+DB_PATH = Path(__file__).parent / "smhb_master_v7.db"
 
 st.set_page_config(
     page_title="SMHB | Gestão Eclesiástica",
@@ -217,24 +221,26 @@ hr { border-color: #EEF1F8 !important; }
 # ─── DATABASE ────────────────────────────────────────────────────────────────
 @contextlib.contextmanager
 def get_db():
-    conn = sqlite3.connect('smhb_master_v7.db', check_same_thread=False)
+    conn = sqlite3.connect(str(DB_PATH), check_same_thread=False)  # FIX 1
     conn.row_factory = sqlite3.Row
     try:
         yield conn
+    except Exception:
+        conn.rollback()  # FIX 2: rollback em erros
+        raise
     finally:
         conn.close()
 
 def init_db():
-    with get_db() as conn:
-        with _db_lock:
-            c = conn.cursor()
-            c.execute('''CREATE TABLE IF NOT EXISTS membros
+    with _db_lock:  # FIX 3: lock envolve get_db(), não o contrário
+        with get_db() as conn:
+            conn.execute('''CREATE TABLE IF NOT EXISTS membros
                          (id INTEGER PRIMARY KEY AUTOINCREMENT,
                           nome TEXT, cargo TEXT, telefone TEXT, igreja TEXT)''')
-            c.execute('''CREATE TABLE IF NOT EXISTS reunioes
+            conn.execute('''CREATE TABLE IF NOT EXISTS reunioes
                          (id INTEGER PRIMARY KEY AUTOINCREMENT,
                           data TEXT, tipo TEXT, horario TEXT, local_igreja TEXT)''')
-            c.execute('''CREATE TABLE IF NOT EXISTS frequencia
+            conn.execute('''CREATE TABLE IF NOT EXISTS frequencia
                          (id INTEGER PRIMARY KEY AUTOINCREMENT,
                           reuniao_id INTEGER, membro_id INTEGER, status TEXT)''')
             conn.commit()
@@ -250,7 +256,7 @@ CARGOS = [
     "Integrante SMHB"
 ]
 IGREJAS = ["Igreja Batista Cristo Rei (CR)", "Igreja Batista Proclamai (P)"]
-TIPOS   = ["Culto", "Reunião de Líderes", "Esporte Missionário", "Intercambio", "Outro"]
+TIPOS   = ["Culto", "Reunião de Líderes", "Esporte Missionário", "Intercâmbio", "Outro"]  # FIX 4
 
 
 # ─── ESTADO DE NAVEGAÇÃO ─────────────────────────────────────────────────────
@@ -330,10 +336,11 @@ with st.sidebar:
 
     st.markdown("<div style='height:18px'></div>", unsafe_allow_html=True)
 
-    with get_db() as conn:
-        m_cr    = conn.execute("SELECT count(*) FROM membros WHERE igreja LIKE '%Cristo Rei%'").fetchone()[0]
-        m_p     = conn.execute("SELECT count(*) FROM membros WHERE igreja LIKE '%Proclamai%'").fetchone()[0]
-        total_r = conn.execute("SELECT count(*) FROM reunioes").fetchone()[0]
+    with _db_lock:
+        with get_db() as conn:
+            m_cr    = conn.execute("SELECT count(*) FROM membros WHERE igreja LIKE '%Cristo Rei%'").fetchone()[0]
+            m_p     = conn.execute("SELECT count(*) FROM membros WHERE igreja LIKE '%Proclamai%'").fetchone()[0]
+            total_r = conn.execute("SELECT count(*) FROM reunioes").fetchone()[0]
 
     st.markdown(f"""
     <div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);
@@ -359,12 +366,13 @@ with st.sidebar:
 
 # ─── PÁGINA: HOME ─────────────────────────────────────────────────────────────
 if st.session_state.page == 'home':
-    with get_db() as conn:
-        m_cr    = conn.execute("SELECT count(*) FROM membros WHERE igreja LIKE '%Cristo Rei%'").fetchone()[0]
-        m_p     = conn.execute("SELECT count(*) FROM membros WHERE igreja LIKE '%Proclamai%'").fetchone()[0]
-        total   = conn.execute("SELECT count(*) FROM membros").fetchone()[0]
-        futuras = conn.execute("SELECT count(*) FROM reunioes WHERE data >= ?",
-                               (datetime.now().strftime("%Y-%m-%d"),)).fetchone()[0]
+    with _db_lock:
+        with get_db() as conn:
+            m_cr    = conn.execute("SELECT count(*) FROM membros WHERE igreja LIKE '%Cristo Rei%'").fetchone()[0]
+            m_p     = conn.execute("SELECT count(*) FROM membros WHERE igreja LIKE '%Proclamai%'").fetchone()[0]
+            total   = conn.execute("SELECT count(*) FROM membros").fetchone()[0]
+            futuras = conn.execute("SELECT count(*) FROM reunioes WHERE data >= ?",
+                                   (datetime.now().strftime("%Y-%m-%d"),)).fetchone()[0]
 
     st.markdown(f"""
     <div style="background:linear-gradient(135deg,#1B2B5E 0%,#2E46A4 100%);
@@ -392,10 +400,10 @@ if st.session_state.page == 'home':
     """, unsafe_allow_html=True)
 
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Total de Membros",      total)
-    c2.metric("🔵 Cristo Rei",         m_cr)
-    c3.metric("🟠 Proclamai",          m_p)
-    c4.metric("Próximas Atividades",   futuras)
+    c1.metric("Total de Membros",    total)
+    c2.metric("🔵 Cristo Rei",       m_cr)
+    c3.metric("🟠 Proclamai",        m_p)
+    c4.metric("Próximas Atividades", futuras)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -440,20 +448,21 @@ elif st.session_state.page == 'new':
             if not nome or len(nome) < 3:
                 st.error("❌ Preencha o nome completo do membro.")
             else:
-                with get_db() as conn:
-                    existente = conn.execute(
-                        "SELECT id FROM membros WHERE nome = ?", (nome,)
-                    ).fetchone()
-                    if existente:
-                        st.warning(f"⚠️ Já existe um membro com o nome **{nome}** cadastrado.")
-                    else:
-                        with _db_lock:
+                # FIX 3: lock envolve check + insert — sem race condition
+                with _db_lock:
+                    with get_db() as conn:
+                        existente = conn.execute(
+                            "SELECT id FROM membros WHERE nome = ?", (nome,)
+                        ).fetchone()
+                        if existente:
+                            st.warning(f"⚠️ Já existe um membro com o nome **{nome}** cadastrado.")
+                        else:
                             conn.execute(
                                 "INSERT INTO membros (nome, cargo, telefone, igreja) VALUES (?,?,?,?)",
                                 (nome, cargo, tel, igreja)
                             )
                             conn.commit()
-                        st.success(f"✅ **{nome}** registrado com sucesso!")
+                            st.success(f"✅ **{nome}** registrado com sucesso!")
 
 
 # ─── PÁGINA: MEMBROS ──────────────────────────────────────────────────────────
@@ -466,14 +475,15 @@ elif st.session_state.page == 'membros':
     f_igreja = col_f.selectbox("", ["Todas as Igrejas"] + IGREJAS,
                                 label_visibility="collapsed")
 
-    with get_db() as conn:
-        rank_sql = "CASE cargo "
-        for i, c in enumerate(CARGOS):
-            rank_sql += f"WHEN '{c}' THEN {i} "
-        rank_sql += "ELSE 99 END as rank"
-        membros = conn.execute(
-            f"SELECT *, {rank_sql} FROM membros ORDER BY rank ASC, nome ASC"
-        ).fetchall()
+    with _db_lock:
+        with get_db() as conn:
+            rank_sql = "CASE cargo "
+            for i, c in enumerate(CARGOS):
+                rank_sql += f"WHEN '{c}' THEN {i} "
+            rank_sql += "ELSE 99 END as rank"
+            membros = conn.execute(
+                f"SELECT *, {rank_sql} FROM membros ORDER BY rank ASC, nome ASC"
+            ).fetchall()
 
     filtrados = [
         m for m in membros
@@ -492,13 +502,12 @@ elif st.session_state.page == 'membros':
                     "Ajuste os filtros ou cadastre um novo membro na aba ➕ Novo Membro.")
     else:
         for m in filtrados:
-            is_cr    = "Cristo Rei" in m['igreja']
+            is_cr     = "Cristo Rei" in m['igreja']
             badge_cls = "badge-cr" if is_cr else "badge-p"
-            initials = get_initials(m['nome'])
-            icon     = "🔵" if is_cr else "🟠"
+            initials  = get_initials(m['nome'])
+            icon      = "🔵" if is_cr else "🟠"
 
             with st.expander(f"{icon}  {m['nome'].title()}   ·   {m['cargo']}"):
-                # ── Cabeçalho do card ──────────────────────────────────
                 col_av, col_info = st.columns([1, 7])
                 with col_av:
                     st.markdown(
@@ -518,7 +527,6 @@ elif st.session_state.page == 'membros':
                 st.markdown("<hr style='border:none;border-top:1px solid #EEF1F8;margin:14px 0 10px;'>",
                             unsafe_allow_html=True)
 
-                # ── Formulário de edição inline ────────────────────────
                 with st.form(f"edit_{m['id']}"):
                     st.markdown("<p style='font-size:12px;color:#9CA3AF;font-weight:600;"
                                 "text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;'>"
@@ -537,8 +545,8 @@ elif st.session_state.page == 'membros':
                     )
 
                     if st.form_submit_button("💾  Salvar Alterações", use_container_width=True):
-                        with get_db() as conn:
-                            with _db_lock:
+                        with _db_lock:
+                            with get_db() as conn:
                                 conn.execute(
                                     "UPDATE membros SET telefone=?, cargo=?, igreja=? WHERE id=?",
                                     (new_tel, new_cargo, new_igreja, m['id'])
@@ -547,12 +555,11 @@ elif st.session_state.page == 'membros':
                         st.success("✅ Alterações salvas!")
                         st.rerun()
 
-                # ── Botão de remoção ───────────────────────────────────
                 if st.button("🗑️  Remover Membro", key=f"del_{m['id']}",
                              use_container_width=True):
-                    with get_db() as conn:
-                        with _db_lock:
-                            conn.execute("DELETE FROM membros WHERE id=?",     (m['id'],))
+                    with _db_lock:
+                        with get_db() as conn:
+                            conn.execute("DELETE FROM membros WHERE id=?",          (m['id'],))
                             conn.execute("DELETE FROM frequencia WHERE membro_id=?", (m['id'],))
                             conn.commit()
                     st.rerun()
@@ -568,14 +575,14 @@ elif st.session_state.page == 'agenda':
         horario = c2.text_input("Horário de Início", "19:00")
 
         c3, c4 = st.columns(2)
-        tipo  = c3.selectbox("Tipo de Evento",       TIPOS)
-        local = c4.selectbox("Local de Realização",  IGREJAS)
+        tipo  = c3.selectbox("Tipo de Evento",      TIPOS)
+        local = c4.selectbox("Local de Realização", IGREJAS)
 
         st.markdown("<br>", unsafe_allow_html=True)
         submitted = st.form_submit_button("📅   Confirmar Agendamento", use_container_width=True)
         if submitted:
-            with get_db() as conn:
-                with _db_lock:
+            with _db_lock:
+                with get_db() as conn:
                     conn.execute(
                         "INSERT INTO reunioes (data, tipo, horario, local_igreja) VALUES (?,?,?,?)",
                         (data.strftime("%Y-%m-%d"), tipo, horario, local)
@@ -590,19 +597,20 @@ elif st.session_state.page == 'history':
                 "Consulte e gerencie todas as atividades registradas")
 
     hoje = datetime.now().strftime("%Y-%m-%d")
-    with get_db() as conn:
-        reunioes = conn.execute("""
-            SELECT r.*,
-              (SELECT count(*) FROM frequencia f
-               WHERE f.reuniao_id = r.id AND f.status = 'Presente') AS presentes,
-              (SELECT count(*) FROM frequencia f2
-               WHERE f2.reuniao_id = r.id) AS total_reg
-            FROM reunioes r
-            ORDER BY
-              CASE WHEN data >= ? THEN 0 ELSE 1 END ASC,
-              CASE WHEN data >= ? THEN data END ASC,
-              data DESC
-        """, (hoje, hoje)).fetchall()
+    with _db_lock:
+        with get_db() as conn:
+            reunioes = conn.execute("""
+                SELECT r.*,
+                  (SELECT count(*) FROM frequencia f
+                   WHERE f.reuniao_id = r.id AND f.status = 'Presente') AS presentes,
+                  (SELECT count(*) FROM frequencia f2
+                   WHERE f2.reuniao_id = r.id) AS total_reg
+                FROM reunioes r
+                ORDER BY
+                  CASE WHEN data >= ? THEN 0 ELSE 1 END ASC,
+                  CASE WHEN data >= ? THEN data END ASC,
+                  data DESC
+            """, (hoje, hoje)).fetchall()
 
     if not reunioes:
         empty_state("📅", "Nenhuma atividade registrada",
@@ -622,9 +630,9 @@ elif st.session_state.page == 'history':
                 )
                 if col_d.button("🗑️ Excluir", key=f"del_r_{r['id']}",
                                 use_container_width=True):
-                    with get_db() as conn:
-                        with _db_lock:
-                            conn.execute("DELETE FROM reunioes WHERE id=?",          (r['id'],))
+                    with _db_lock:
+                        with get_db() as conn:
+                            conn.execute("DELETE FROM reunioes WHERE id=?",           (r['id'],))
                             conn.execute("DELETE FROM frequencia WHERE reuniao_id=?", (r['id'],))
                             conn.commit()
                     st.rerun()
@@ -646,11 +654,12 @@ elif st.session_state.page == 'attendance':
                 "Registre a frequência dos membros nos eventos")
 
     hoje = datetime.now().strftime("%Y-%m-%d")
-    with get_db() as conn:
-        reus = conn.execute("""
-            SELECT * FROM reunioes
-            ORDER BY CASE WHEN data >= ? THEN 0 ELSE 1 END ASC, data ASC
-        """, (hoje,)).fetchall()
+    with _db_lock:
+        with get_db() as conn:
+            reus = conn.execute("""
+                SELECT * FROM reunioes
+                ORDER BY CASE WHEN data >= ? THEN 0 ELSE 1 END ASC, data ASC
+            """, (hoje,)).fetchall()
 
     if not reus:
         empty_state("📅", "Nenhum evento disponível",
@@ -663,14 +672,16 @@ elif st.session_state.page == 'attendance':
         selecionado = st.selectbox("🎯  Selecionar Evento:", list(opcoes.keys()))
         rid = opcoes[selecionado]
 
-        with get_db() as conn:
-            membros  = conn.execute("SELECT * FROM membros ORDER BY nome ASC").fetchall()
-            existing = {
-                f['membro_id']: f['status']
-                for f in conn.execute(
-                    "SELECT * FROM frequencia WHERE reuniao_id=?", (rid,)
-                ).fetchall()
-            }
+        # FIX 5: precarrega presenças existentes em uma única transação com lock
+        with _db_lock:
+            with get_db() as conn:
+                membros  = conn.execute("SELECT * FROM membros ORDER BY nome ASC").fetchall()
+                existing = {
+                    f['membro_id']: f['status']
+                    for f in conn.execute(
+                        "SELECT * FROM frequencia WHERE reuniao_id=?", (rid,)
+                    ).fetchall()
+                }
 
         if not membros:
             st.warning("⚠️ Nenhum membro cadastrado. Acesse **➕ Novo Membro** primeiro.")
@@ -701,9 +712,9 @@ elif st.session_state.page == 'attendance':
                     section_label(grupo_label, color="#1B2B5E" if is_cr else "#92400E")
 
                     for m in grupo:
-                        initials     = get_initials(m['nome'])
-                        default_st   = existing.get(m['id'], "Presente")
-                        default_idx  = ["Presente", "Falta", "Justificado"].index(default_st)
+                        initials    = get_initials(m['nome'])
+                        default_st  = existing.get(m['id'], "Presente")
+                        default_idx = ["Presente", "Falta", "Justificado"].index(default_st)
 
                         col_av, col_nm, col_rd = st.columns([1, 4, 5])
 
@@ -732,14 +743,14 @@ elif st.session_state.page == 'attendance':
 
                 st.markdown("<br>", unsafe_allow_html=True)
                 if st.form_submit_button("💾   Registrar Presenças", use_container_width=True):
-                    with get_db() as conn:
-                        with _db_lock:
+                    with _db_lock:
+                        with get_db() as conn:
                             conn.execute("DELETE FROM frequencia WHERE reuniao_id=?", (rid,))
-                            for mid, status in mapa.items():
-                                conn.execute(
-                                    "INSERT INTO frequencia (reuniao_id, membro_id, status) VALUES (?,?,?)",
-                                    (rid, mid, status)
-                                )
+                            # FIX 6: executemany em vez de loop
+                            conn.executemany(
+                                "INSERT INTO frequencia (reuniao_id, membro_id, status) VALUES (?,?,?)",
+                                [(rid, mid, status) for mid, status in mapa.items()]
+                            )
                             conn.commit()
                     pres = sum(1 for s in mapa.values() if s == "Presente")
                     st.success(f"✅ Frequência salva! {pres} presente(s) de {len(mapa)} membro(s).")
