@@ -14,67 +14,91 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 2. FRAMEWORK VISUAL ADAPTATIVO (DESKTOP/MOBILE/TABLET)
+# 2. FRAMEWORK VISUAL ADAPTATIVO CORRIGIDO (ALTO CONTRASTE CONTRA TEMA ESCURO)
 st.markdown("""
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
         
-        html, body, [class*="css"] {
-            font-family: 'Plus Jakarta Sans', sans-serif;
-            background-color: #f8fafc;
-            color: #0f172a;
+        /* Reset de Fundo e Texto Global Garantido */
+        html, body, [data-testid="stAppViewContainer"] {
+            font-family: 'Plus Jakarta Sans', sans-serif !important;
+            background-color: #f8fafc !important;
         }
 
+        /* Correção de Títulos e Textos Invisíveis */
+        h1, h2, h3, h4, h5, h6, p, label, .stMarkdown p {
+            font-family: 'Plus Jakarta Sans', sans-serif !important;
+            color: #0f172a !important;
+        }
+
+        /* Correção Absoluta dos Blocos de Métricas (Invisibilidade de Números) */
+        [data-testid="stMetric"] {
+            background-color: #ffffff !important;
+            border: 2px solid #e2e8f0 !important;
+            padding: 20px !important;
+            border-radius: 20px !important;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05) !important;
+        }
+        
+        /* Forçar visibilidade das labels e valores numéricos das métricas */
+        [data-testid="stMetricLabel"] {
+            color: #64748b !important;
+            font-size: 14px !important;
+            font-weight: 600 !important;
+        }
+        [data-testid="stMetricValue"] > div {
+            color: #1e293b !important;
+            font-size: 32px !important;
+            font-weight: 800 !important;
+        }
+
+        /* Botões Estilizados e Visíveis */
         .stButton>button {
-            width: 100%;
-            border-radius: 14px;
-            border: 1px solid #e2e8f0;
-            background: #ffffff;
-            color: #475569;
-            padding: 10px 15px;
-            font-weight: 600;
-            transition: all 0.25s ease;
-            height: 3.5rem;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+            width: 100% !important;
+            border-radius: 14px !important;
+            border: 2px solid #e2e8f0 !important;
+            background-color: #ffffff !important;
+            color: #1e293b !important;
+            padding: 10px 15px !important;
+            font-weight: 700 !important;
+            transition: all 0.25s ease !important;
+            height: 3.5rem !important;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.02) !important;
         }
 
         .stButton>button:hover {
-            border-color: #2563eb;
-            color: #2563eb;
-            background: #f0f6ff;
-            transform: translateY(-1px);
-        }
-
-        [data-testid="stMetric"] {
-            background: #ffffff !important;
-            border: 1px solid #e2e8f0 !important;
-            padding: 20px !important;
-            border-radius: 20px !important;
-            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02) !important;
+            border-color: #2563eb !important;
+            color: #2563eb !important;
+            background-color: #f0f6ff !important;
+            transform: translateY(-1px) !important;
         }
 
         .tutorial-box {
-            background: linear-gradient(135deg, #eff6ff, #dbeafe);
-            border-left: 6px solid #2563eb;
-            padding: 20px;
-            border-radius: 14px;
-            margin-top: 15px;
-            margin-bottom: 20px;
+            background: linear-gradient(135deg, #eff6ff, #dbeafe) !important;
+            border-left: 6px solid #2563eb !important;
+            padding: 20px !important;
+            border-radius: 14px !important;
+            margin-top: 15px !important;
+            margin-bottom: 20px !important;
+            color: #1e3a8a !important;
+        }
+        .tutorial-box li, .tutorial-box b {
+            color: #1e3a8a !important;
         }
 
         .badge {
-            display: inline-block;
-            padding: 4px 12px;
-            border-radius: 99px;
-            font-size: 11px;
-            font-weight: 700;
-            text-transform: uppercase;
+            display: inline-block !important;
+            padding: 4px 12px !important;
+            border-radius: 99px !important;
+            font-size: 11px !important;
+            font-weight: 700 !important;
+            text-transform: uppercase !important;
         }
-        .badge-cr { background: #dbeafe; color: #1e40af; border: 1px solid #bfdbfe; }
-        .badge-p { background: #ffedd5; color: #9a3412; border: 1px solid #fed7aa; }
+        .badge-cr { background-color: #dbeafe !important; color: #1e40af !important; border: 1px solid #bfdbfe !important; }
+        .badge-p { background-color: #ffedd5 !important; color: #9a3412 !important; border: 1px solid #fed7aa !important; }
 
         @media (max-width: 768px) {
-            .stButton>button { height: 3.8rem; font-size: 15px; }
+            .stButton>button { height: 3.8rem !important; font-size: 15px !important; }
             .stRadio>div { gap: 15px !important; }
         }
     </style>
@@ -145,12 +169,12 @@ if st.session_state.page == 'home':
     col2.metric("Membros Proclamai", m2)
     col3.metric("Atividades Registradas", r1)
     
-    st.markdown("---")
+    st.markdown("<hr style='border: 1px solid #e2e8f0;'>", unsafe_allow_html=True)
     
     with st.expander("📖 TUTORIAL INTERNO DE USO RÁPIDO (Clique para abrir/fechar)", expanded=False):
         st.markdown("""
         <div class="tutorial-box">
-            <h4 style='margin-top:0;'>🚀 Aprenda a usar o sistema em menos de 1 minuto:</h4>
+            <h4 style='margin-top:0; color:#1e3a8a;'>🚀 Aprenda a usar o sistema em menos de 1 minuto:</h4>
             <ol>
                 <li><b>Cadastrar Membros:</b> Vá na aba <b>➕ Novo</b>, preencha os dados e salve.</li>
                 <li><b>Criar Eventos:</b> Vá em <b>📅 Agenda</b> para programar o próximo culto ou reunião.</li>
@@ -249,7 +273,7 @@ elif st.session_state.page == 'history':
             data_br = datetime.strptime(r['data'], "%Y-%m-%d").strftime("%d/%m/%Y")
             with st.expander(f"{status_cor} {data_br} — {r['tipo']} ({r['horario']})"):
                 st.write(f"**Local:** {r['local_igreja']}")
-                if st.button("Excluir Evento", key=f"del_r_{r['id']}"):
+                if r['id'] and st.button("Excluir Evento", key=f"del_r_{r['id']}"):
                     with get_db() as conn:
                         with _db_lock:
                             conn.execute("DELETE FROM reunioes WHERE id=?", (r['id'],))
@@ -279,7 +303,7 @@ elif st.session_state.page == 'attendance':
                 st.markdown(f"**{m['nome']}**")
                 mapa_presenca[m['id']] = st.radio(f"Status_{m['id']}", ["Presente", "Falta", "Justificado"], 
                                            horizontal=True, key=f"freg_{m['id']}", label_visibility="collapsed")
-                st.markdown("---")
+                st.markdown("<hr style='border: 1px solid #e2e8f0;'>", unsafe_allow_html=True)
             
             if st.form_submit_button("💾 Registrar Presenças"):
                 with get_db() as conn:
